@@ -1,0 +1,827 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>НеШкола - Система набора учеников</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/aos@2.3.4/dist/aos.js"></script>
+    <style>
+        @tailwind base;
+        @tailwind components;
+        @tailwind utilities;
+
+        :root {
+            --primary: #1E1E2F;
+            --accent: #4F46E5;
+            --secondary: #A5B4FC;
+            --background: #F9FAFB;
+            --text: #111827;
+            --light-accent: #6366F1;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes sparkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        .slide-in {
+            animation: slideIn 0.7s ease-in-out forwards;
+        }
+
+        .pulse-hover:hover {
+            transform: scale(1.05);
+            animation: pulse 0.4s ease-in-out;
+        }
+
+        .float {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .sparkle {
+            animation: sparkle 1.5s ease-in-out infinite;
+        }
+
+        .card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease-in-out;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+        }
+
+        .jagged-card {
+            position: relative;
+            clip-path: polygon(
+                0 0,
+                5% 2%,
+                10% 0,
+                15% 3%,
+                90% 0,
+                95% 2%,
+                100% 0,
+                100% 100%,
+                95% 98%,
+                90% 100%,
+                15% 97%,
+                10% 100%,
+                5% 98%,
+                0 100%
+            );
+        }
+
+        .clean-border {
+            border: 3px solid var(--accent);
+            border-radius: 8px;
+        }
+
+        .scattered-item {
+            display: inline-block;
+            transform-origin: center;
+            margin: 4px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            font-size: clamp(0.875rem, 2.5vw, 1rem);
+        }
+
+        .scattered-item:nth-child(odd) {
+            transform: rotate(3deg) translateY(6px);
+        }
+
+        .scattered-item:nth-child(even) {
+            transform: rotate(-3deg) translateY(-6px);
+        }
+
+        .scattered-item:hover {
+            transform: rotate(0deg) translateY(0);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .decorative-shape {
+            position: absolute;
+            opacity: 0.2;
+            z-index: -1;
+        }
+
+        .circle {
+            border-radius: 50%;
+            background: var(--secondary);
+        }
+
+        .triangle {
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            background: var(--accent);
+        }
+
+        .gradient-card {
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--accent) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stats-card {
+            position: relative;
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--accent) 100%);
+            border-radius: 16px;
+            overflow: auto;
+        }
+
+        .stats-card::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 60px;
+            height: 60px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.1;
+            filter: blur(20px);
+        }
+
+        .stats-item {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .stats-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .hero-bg {
+            background: var(--primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--background);
+            color: var(--text);
+            font-size: clamp(1rem, 2.5vw, 1.25rem);
+        }
+
+        h1 {
+            font-size: clamp(3rem, 10vw, 6rem) !important;
+            line-height: 1.1 !important;
+            font-weight: 900 !important;
+        }
+
+        h2 {
+            font-size: clamp(2.25rem, 7vw, 4rem) !important;
+            line-height: 1.2 !important;
+            font-weight: 900 !important;
+        }
+
+        h3 {
+            font-size: clamp(1.75rem, 5vw, 2.5rem) !important;
+            line-height: 1.2 !important;
+            font-weight: 900 !important;
+        }
+
+        h4 {
+            font-size: clamp(1.25rem, 4vw, 1.75rem) !important;
+            line-height: 1.3 !important;
+            font-weight: 900 !important;
+        }
+
+        p, li, a {
+            font-size: clamp(1rem, 2.5vw, 1.25rem);
+            line-height: 1.6;
+        }
+
+        /* Mobile-specific adjustments */
+        @media (max-width: 640px) {
+            .container {
+                padding-left: 0.5rem;
+                padding-right: 0.5rem;
+            }
+            .grid {
+                gap: 1rem;
+            }
+            .card, .stats-card, .gradient-card {
+                padding: 1rem;
+            }
+            .scattered-item {
+                padding: 6px 12px;
+                margin: 2px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="bg-[var(--primary)] text-white shadow-lg sticky top-0 z-20">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="text-4xl font-bold">НеШкола</div>
+            <nav class="hidden md:flex space-x-8">
+                <a href="#program" class="hover:text-[var(--secondary)] transition text-xl">Программа</a>
+                <a href="#reviews" class="hover:text-[var(--secondary)] transition text-xl">Отзывы</a>
+                <a href="#for-whom" class="hover:text-[var(--secondary)] transition text-xl">Для кого</a>
+                <a href="#format" class="hover:text-[var(--secondary)] transition text-xl">Формат</a>
+                <a href="#selection" class="hover:text-[var(--secondary)] transition text-xl">Отбор</a>
+                <a href="#faq" class="hover:text-[var(--secondary)] transition text-xl">FAQ</a>
+                <a href="#author" class="hover:text-[var(--secondary)] transition text-xl">Об авторе</a>
+            </nav>
+            <a href="#signup" class="bg-[var(--accent)] text-white px-6 py-3 rounded-full hover:bg-[var(--secondary)] pulse-hover transition text-xl">Записаться</a>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero-bg text-white py-20 sm:py-40 relative">
+        <div class="container mx-auto px-4 text-center">
+            <h1 class="font-extrabold mb-6 slide-in">НеШкола: Стань звездой репетиторства</h1>
+            <p class="max-w-3xl mx-auto mb-10 slide-in">Создай поток учеников, увеличь доход до 250к в месяц и построй систему, которая работает на тебя!</p>
+            <div class="flex justify-center space-x-6 flex-wrap gap-4">
+                <a href="#signup" class="bg-[var(--accent)] text-white px-8 py-3 rounded-full font-semibold pulse-hover transition slide-in">Начать обучение</a>
+                <a href="#program" class="border-2 border-[var(--secondary)] text-[var(--secondary)] px-8 py-3 rounded-full font-semibold pulse-hover transition slide-in">Смотреть программу</a>
+            </div>
+            <div class="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-[var(--background)] to-transparent"></div>
+        </div>
+    </section>
+
+    <!-- For Whom Section -->
+    <section id="for-whom" class="bg-[var(--background)] py-16">
+        <div class="container mx-auto px-4">
+            <h2 class="font-bold text-center text-[var(--text)] mb-12 slide-in">Для кого это менторство?</h2>
+            <div class="grid sm:grid-cols-2 gap-6">
+                <!-- Студенты и репетиторы-новички -->
+                <div class="card jagged-card bg-[var(--secondary)] text-white p-6 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-white opacity-20 rounded-full blur-2xl"></div>
+                    <div class="jagged-card bg-[var(--primary)] p-4 mb-4">
+                        <h3 class="font-bold text-center">Студенты и репетиторы-новички</h3>
+                    </div>
+                    <p class="mb-6">Хотите зарабатывать на своих знаниях и выйти на высокий доход? Это для вас!</p>
+                    <div class="flex flex-wrap gap-3 justify-center">
+                        <div class="scattered-item bg-white text-[var(--text)]">Создадите свой продукт с помощью методологов</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Научитесь привлекать поток учеников</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Освоите пробные уроки и легкие продажи</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Ведение занятий для рекомендаций</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Поставите высокий чек без страхов</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Выйдете на 100−200к в месяц</div>
+                    </div>
+                </div>
+                <!-- Опытные репетиторы -->
+                <div class="card jagged-card bg-[var(--secondary)] text-white p-6 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-white opacity-20 rounded-full blur-2xl"></div>
+                    <div class="jagged-card bg-[var(--primary)] p-4 mb-4">
+                        <h3 class="font-bold text-center">Опытные репетиторы</h3>
+                    </div>
+                    <p class="mb-6">Масштабируйте доход через мини-группы и работайте меньше!</p>
+                    <div class="flex flex-wrap gap-3 justify-center">
+                        <div class="scattered-item bg-white text-[var(--text)]">Перевод учеников в мини-группы</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Увеличение потока через новые каналы</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Часовая ставка 6−10к за счет групп</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Больше времени на жизнь и развитие</div>
+                        <div class="scattered-item bg-white text-[var(--text)]">Доход 300−500к, работая 10−15ч/неделя</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Program Section -->
+    <section id="program" class="bg-[var(--primary)] text-white py-12 relative">
+        <div class="container mx-auto px-4">
+            <h2 class="font-bold text-center mb-10 slide-in">Программа менторства</h2>
+            <!-- Decorative Shapes -->
+            <div class="decorative-shape circle w-16 h-16 top-6 left-6"></div>
+            <div class="decorative-shape triangle w-12 h-12 bottom-12 right-12 rotate-45"></div>
+            <div class="decorative-shape circle w-20 h-20 top-1/4 right-6 opacity-10"></div>
+            <div class="grid sm:grid-cols-2 gap-6">
+                <!-- Тариф Новички -->
+                <div class="card jagged-card p-6 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-24 h-24 bg-[var(--secondary)] opacity-10 rounded-full blur-3xl"></div>
+                    <div class="jagged-card bg-[var(--light-accent)] text-white p-4 mb-4">
+                        <h3 class="font-bold text-center">Тариф "Новички" (15 мест)</h3>
+                    </div>
+                    <div class="clean-border p-4">
+                        <div class="space-y-4 text-[var(--text)]">
+                            <div>
+                                <h4 class="font-semibold text-white">Ступень 1: Позиционирование, поиск учеников и продажи [длительность: 2 недели]</h4>
+                                <div class="space-y-2">
+                                    <p class="font-semibold text-white">Теория</p>
+                                    <ul class="list-disc pl-6 text-white">
+                                        <li>Блок по продажам</li>
+                                    </ul>
+                                    <p class="font-semibold text-white">Практика</p>
+                                    <ul class="list-disc pl-6 text-white">
+                                        <li>Упаковка площадки поиска учеников</li>
+                                        <li>Запуск трафика на пробные уроки</li>
+                                        <li>Первые заявки</li>
+                                        <li>Обучение ведения пробных уроков</li>
+                                        <li>Ведение пробных и продажи</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-white">Ступень 2: Ведение уроков [длительность: 2 недели]</h4>
+                                <div class="space-y-2">
+                                    <p class="font-semibold text-white">Теория</p>
+                                    <ul class="list-disc pl-6 text-white">
+                                        <li>Блок по продукту</li>
+                                    </ul>
+                                    <p class="font-semibold text-white">Практика</p>
+                                    <ul class="list-disc pl-6 text-white">
+                                        <li>Детальный план обучения</li>
+                                        <li>Повышаем чек</li>
+                                        <li>Эффективное проведение уроков</li>
+                                        <li>Как правильно получать оплату</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-white">Ступень 3: Масштабирование [длительность: 4 недели]</h4>
+                                <div class="space-y-2">
+                                    <p class="font-semibold text-white">Теория</p>
+                                    <ul class="list-disc pl-6 text-white">
+                                        <li>Система делегирования</li>
+                                        <li>Как масштабировать без выгорания</li>
+                                    </ul>
+                                    <p class="font-semibold text-white">Практика</p>
+                                    <ul class="list-disc pl-6 text-white">
+                                        <li>Дополнительные площадки для трафика</li>
+                                        <li>Увеличение заявок на пробные</li>
+                                        <li>Улучшение процессов с куратором</li>
+                                        <li>Таблица учёта учеников и оплат</li>
+                                        <li>Учёт финансов</li>
+                                        <li>Чек-листы и оптимизация процессов</li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="jagged-card bg-[var(--primary)] text-white p-6">
+                                <h4 class="font-semibold">Бонус</h4>
+                                <ul class="list-disc pl-6">
+                                    <li>Скрипты, шаблоны, видеоуроки</li>
+                                    <li>Таблицы и чек-листы</li>
+                                    <li>Вебинары, база знаний, работа с возражениями</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Тариф Опытные -->
+                <div class="card jagged-card bg-white p-6 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-24 h-24 bg-[var(--secondary)] opacity-10 rounded-full blur-3xl"></div>
+                    <div class="jagged-card bg-[var(--primary)] text-white p-4 mb-4">
+                        <h3 class="font-bold text-center">Тариф "Опытные" (5 мест)</h3>
+                    </div>
+                    <p class="mb-4 text-[var(--text)]">Включает все из тарифа "Новички" плюс:</p>
+                    <div class="space-y-4 text-[var(--text)]">
+                        <div>
+                            <h4 class="font-semibold text-[var(--text)]">Ступень 4: Мини-группы [длительность: 4 недели]</h4>
+                            <div class="space-y-2">
+                                <p class="font-semibold">Практика</p>
+                                <ul class="list-disc pl-6">
+                                    <li>Блок по продукту — как вести мини-группы</li>
+                                    <li>Блок по продаже мини-групп</li>
+                                    <li>Блок “Найм и управление”</li>
+                                    <li>Блок “Мышление”</li>
+                                </ul>
+                                <p class="font-semibold">Теория</p>
+                                <ul class="list-disc pl-6">
+                                    <li>4 живых урока (1 раз в неделю)</li>
+                                    <li>Личный трекинг от Ильи</li>
+                                    <li>Секретные способы поиска клиентов: создаём поток заявок</li>
+                                    <li>Как продавать и организовывать мини-группы</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Format Section -->
+    <section id="format" class="bg-[var(--background)] py-16">
+        <div class="container mx-auto px-4">
+            <h2 class="font-bold text-center text-[var(--text)] mb-12 slide-in">Формат менторства</h2>
+            <div class="space-y-6 max-w-4xl mx-auto">
+                <!-- Block 1: Community and Assignments -->
+                <div class="card gradient-card text-white p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full blur-3xl"></div>
+                    <div class="absolute bottom-0 right-0 w-16 h-16 bg-[var(--primary)] opacity-20 rounded-full blur-2xl"></div>
+                    <div class="absolute top-4 left-4 w-6 h-6 bg-[var(--accent)] rounded-full float"></div>
+                    <ul class="space-y-2">
+                        <li class="flex items-start">
+                            <span class="text-white mr-2">📚</span> Общий чат и домашние задания с проверкой
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-white mr-2">👥</span> Работа с куратором: отчетность, проверка ДЗ
+                        </li>
+                    </ul>
+                </div>
+                <!-- Block 2: Live and Recorded Lessons -->
+                <div class="card gradient-card text-white p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-white opacity-10 rounded-full blur-3xl"></div>
+                    <div class="absolute bottom-0 left-0 w-16 h-16 bg-[var(--primary)] opacity-20 rounded-full blur-2xl"></div>
+                    <div class="absolute top-4 right-4 w-6 h-6 bg-[var(--secondary)] rounded-full float" style="animation-delay: 1s;"></div>
+                    <ul class="space-y-2">
+                        <li class="flex items-start">
+                            <span class="text-white mr-2">🎥</span> 8 живых уроков с Ильёй 1 раз в неделю
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-white mr-2">📼</span> Уроки в записи от Ильи
+                        </li>
+                    </ul>
+                </div>
+                <!-- Block 3: Expert Collaboration -->
+                <div class="card gradient-card text-white p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full blur-3xl"></div>
+                    <div class="absolute bottom-0 right-0 w-16 h-16 bg-[var(--primary)] opacity-20 rounded-full blur-2xl"></div>
+                    <div class="absolute bottom-4 left-4 w-6 h-6 bg-[var(--accent)] rounded-full float" style="animation-delay: 0.5s;"></div>
+                    <ul class="space-y-2">
+                        <li class="flex items-start">
+                            <span class="text-white mr-2">🧑‍🏫</span> Работа с экспертами ЕГЭ по методологии преподавания
+                        </li>
+                    </ul>
+                </div>
+                <!-- Block 4: Support and Mindset -->
+                <div class="card gradient-card text-white p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-white opacity-10 rounded-full blur-3xl"></div>
+                    <div class="absolute bottom-0 left-0 w-16 h-16 bg-[var(--primary)] opacity-20 rounded-full blur-2xl"></div>
+                    <div class="absolute bottom-4 right-4 w-6 h-6 bg-[var(--secondary)] rounded-full float" style="animation-delay: 1.5s;"></div>
+                    <ul class="space-y-2">
+                        <li class="flex items-start">
+                            <span class="text-white mr-2">❓</span> База часто задаваемых вопросов и ответов
+                        </li>
+                        <li class="flex items-start">
+                            <span class="text-white mr-2">🧠</span> Еженедельные мастермайнды с Ильёй для проработки целей
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Selection Section -->
+    <section id="selection" class="bg-[var(--primary)] text-white py-16">
+        <div class="container mx-auto px-4">
+            <h2 class="font-bold text-center mb-12 slide-in">Отбор на менторство</h2>
+            <div class="card gradient-card text-white p-8 rounded-xl max-w-4xl mx-auto relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+                <div class="absolute bottom-0 left-0 w-24 h-24 bg-[var(--secondary)] opacity-20 rounded-full blur-2xl"></div>
+                <div class="absolute top-4 right-4 w-8 h-8 bg-[var(--accent)] rounded-full float"></div>
+                <div class="grid sm:grid-cols-2 gap-6">
+                    <!-- Left: Description -->
+                    <div>
+                        <p class="mb-4">Менторство в НеШколе — это эксклюзивная программа для тех, кто готов расти.</p>
+                        <ul class="space-y-4">
+                            <li class="flex items-start">
+                                <span class="text-white mr-2">🔍</span> Заполните анкету с опытом и целями
+                            </li>
+                            <li class="flex items-start">
+                                <span class="text-white mr-2">📞</span> Пройдите короткое собеседование
+                            </li>
+                            <li class="flex items-start">
+                                <span class="text-white mr-2">✅</span> Получите доступ, если мотивированы
+                            </li>
+                        </ul>
+                        <p class="mt-4">Места ограничены (15 для "Новичков", 5 для "Опытных")!</p>
+                    </div>
+                    <!-- Right: Motivation and Button -->
+                    <div class="flex flex-col justify-center items-center text-center">
+                        <p class="text-2xl font-bold mb-6">Стань частью элитной программы!</p>
+                        <p class="mb-6">Пройди отбор и начни строить свою систему набора учеников уже сегодня.</p>
+                        <a href="#signup" class="bg-[var(--primary)] text-white px-8 py-4 rounded-full font-semibold pulse-hover transition">Отправить заявку</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="reviews" class="bg-[var(--background)] py-16">
+        <div class="container mx-auto px-4">
+            <h2 class="font-bold text-center text-[var(--text)] mb-12 slide-in">Результаты наших учеников</h2>
+            <!-- Reviews -->
+            <div class="grid sm:grid-cols-3 gap-6 mb-12">
+                <div class="card bg-white p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-16 h-16 bg-[var(--accent)] opacity-20 rounded-full blur-xl"></div>
+                    <p class="mb-4 italic">"Заявки выросли в 3 раза, ценник +40%!"</p>
+                    <p class="font-bold text-[var(--accent)]">Анна Смирнова</p>
+                    <p class="text-gray-500">Репетитор по математике</p>
+                </div>
+                <div class="card bg-white p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-16 h-16 bg-[var(--accent)] opacity-20 rounded-full blur-xl"></div>
+                    <p class="mb-4 italic">"7-8 из 10 пробников остаются!"</p>
+                    <p class="font-bold text-[var(--accent)]">Иван Петров</p>
+                    <p class="text-gray-500">Преподаватель английского</p>
+                </div>
+                <div class="card bg-white p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-16 h-16 bg-[var(--accent)] opacity-20 rounded-full blur-xl"></div>
+                    <p class="mb-4 italic">"Доход +65%, времени меньше!"</p>
+                    <p class="font-bold text-[var(--accent)]">Елена Ковалева</p>
+                    <p class="text-gray-500">Репетитор по русскому</p>
+                </div>
+            </div>
+            <!-- Stats and Chart -->
+            <div class="stats-card p-6 max-w-full mx-auto slide-in relative">
+                <svg class="absolute top-4 left-4 w-6 h-6 text-white sparkle" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/>
+                </svg>
+                <svg class="absolute bottom-4 right-4 w-6 h-6 text-white sparkle" style="animation-delay: 0.5s;" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/>
+                </svg>
+                <h3 class="font-bold text-white mb-6 text-center relative z-10">Результаты после менторства</h3>
+                <div class="grid sm:grid-cols-2 gap-6">
+                    <!-- Stats -->
+                    <div class="space-y-4">
+                        <div class="stats-item flex items-start" data-aos="fade-up" data-aos-delay="100">
+                            <span class="text-[var(--accent)] text-2xl mr-3">💸</span>
+                            <div>
+                                <p class="font-bold text-[var(--text)]">Средний рост дохода</p>
+                                <p class="text-2xl text-[var(--accent)] counter" data-target="50">0%</p>
+                            </div>
+                        </div>
+                        <div class="stats-item flex items-start" data-aos="fade-up" data-aos-delay="200">
+                            <span class="text-[var(--accent)] text-2xl mr-3">📈</span>
+                            <div>
+                                <p class="font-bold text-[var(--text)]">Средняя конверсия пробных уроков</p>
+                                <p class="text-2xl text-[var(--accent)] counter" data-target="75">0%</p>
+                            </div>
+                        </div>
+                        <div class="stats-item flex items-start" data-aos="fade-up" data-aos-delay="300">
+                            <span class="text-[var(--accent)] text-2xl mr-3">👥</span>
+                            <div>
+                                <p class="font-bold text-[var(--text)]">Новые ученики в месяц</p>
+                                <p class="text-2xl text-[var(--accent)] counter" data-target="15">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Chart -->
+                    <div class="relative min-w-0">
+                        <canvas id="incomeChart" class="max-w-full"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section id="faq" class="bg-[var(--primary)] text-white py-16">
+        <div class="container mx-auto px-4">
+            <h2 class="font-bold text-center mb-12 slide-in">Частые вопросы</h2>
+            <div class="space-y-6 max-w-3xl mx-auto">
+                <div class="card bg-white text-[var(--text)] p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-24 h-24 bg-[var(--secondary)] opacity-20 rounded-full blur-2xl"></div>
+                    <h3 class="font-bold text-[var(--accent)]">Сколько времени уделять?</h3>
+                    <p>4-8 недель, 3-4 часа в неделю, уроки в записи.</p>
+                </div>
+                <div class="card bg-white text-[var(--text)] p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-24 h-24 bg-[var(--secondary)] opacity-20 rounded-full blur-2xl"></div>
+                    <h3 class="font-bold text-[var(--accent)]">Какой результат?</h3>
+                    <p>Конверсия пробников до 70-80%, чек +30-50%.</p>
+                </div>
+                <div class="card bg-white text-[var(--text)] p-6 rounded-xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-24 h-24 bg-[var(--secondary)] opacity-20 rounded-full blur-2xl"></div>
+                    <h3 class="font-bold text-[var(--accent)]">Есть ли гарантия?</h3>
+                    <p>14-дневная гарантия возврата денег.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Author Section -->
+    <section id="author" class="bg-[var(--background)] py-16">
+        <div class="container mx-auto px-4 text-center">
+            <h2 class="font-bold text-[var(--text)] mb-12 slide-in">Об авторе</h2>
+            <p class="mb-8">Меня зовут Илья, я помогаю репетиторам зарабатывать.</p>
+            <div class="grid sm:grid-cols-3 gap-6 mb-8">
+                <div class="card bg-white p-6 rounded-xl slide-in">
+                    <p class="text-3xl font-bold text-[var(--accent)]">2000+</p>
+                    <p class="text-[var(--text)]">пробных уроков</p>
+                </div>
+                <div class="card bg-white p-6 rounded-xl slide-in">
+                    <p class="text-3xl font-bold text-[var(--accent)]">300+</p>
+                    <p class="text-[var(--text)]">обученных репетиторов</p>
+                </div>
+                <div class="card bg-white p-6 rounded-xl slide-in">
+                    <p class="text-3xl font-bold text-[var(--accent)]">85%</p>
+                    <p class="text-[var(--text)]">конверсия учеников</p>
+                </div>
+            </div>
+            <p class="max-w-2xl mx-auto">От репетитора с 2 учениками до онлайн-школы.</p>
+        </div>
+    </section>
+
+    <!-- Call to Action -->
+    <section id="signup" class="bg-[var(--accent)] text-white py-16 text-center">
+        <div class="container mx-auto px-4">
+            <h2 class="font-bold mb-8 slide-in">Готовы увеличить количество учеников?</h2>
+            <p class="mb-10 slide-in">Начните применять методы уже сегодня!</p>
+            <a href="https://forms.gle/4yACVGkNmuFjD5xi9" class="bg-white text-[var(--accent)] px-8 py-3 rounded-full font-semibold pulse-hover transition slide-in">Записаться на курс</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="contacts" class="bg-[var(--primary)] text-white py-12">
+        <div class="container mx-auto px-4">
+            <div class="grid md:grid-cols-3 gap-6">
+                <div>
+                    <h3 class="text-2xl font-bold mb-4">НеШкола</h3>
+                    <p>Система набора учеников для репетиторов</p>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold mb-4">Навигация</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#program" class="hover:text-[var(--secondary)]">Программа</a></li>
+                        <li><a href="#reviews" class="hover:text-[var(--secondary)]">Отзывы</a></li>
+                        <li><a href="#for-whom" class="hover:text-[var(--secondary)]">Для кого</a></li>
+                        <li><a href="#format" class="hover:text-[var(--secondary)]">Формат</a></li>
+                        <li><a href="#selection" class="hover:text-[var(--secondary)]">Отбор</a></li>
+                        <li><a href="#faq" class="hover:text-[var(--secondary)]">FAQ</a></li>
+                        <li><a href="#author" class="hover:text-[var(--secondary)]">Об авторе</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold mb-4">Контакты</h3>
+                    <p>[email protected]</p>
+                    <p>8 (800) 123-45-67</p>
+                    <p>Москва, ул. Образцова, 12</p>
+                    <p>ИНН 1234567890</p>
+                </div>
+            </div>
+            <p class="text-center mt-8 text-gray-400">© 2025 НеШкола. Все права защищены.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize AOS
+        AOS.init({ duration: 1000, once: true });
+
+        // Smooth Scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+
+        // Counter Animation
+        document.querySelectorAll('.counter').forEach(counter => {
+            const target = +counter.getAttribute('data-target');
+            const unit = counter.textContent.includes('%') ? '%' : '';
+            let count = 0;
+            const speed = 1500 / target;
+            const updateCount = () => {
+                if (count < target) {
+                    count++;
+                    counter.textContent = unit ? `${count}%` : count;
+                    setTimeout(updateCount, speed);
+                } else {
+                    counter.textContent = unit ? `${target}%` : target;
+                }
+            };
+            updateCount();
+        });
+
+        // Income Growth Chart
+        const ctx = document.getElementById('incomeChart').getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, '#A5B4FC');
+        gradient.addColorStop(1, '#4F46E5');
+
+        const chartData = {
+            labels: ['До менторства', '1 месяц', '2 месяца', '3 месяца', '4 месяца', '5 месяцев', '6 месяцев'],
+            datasets: [{
+                label: 'Заработок, ₽',
+                data: [50000, 75000, 100000, 140000, 180000, 220000, 250000],
+                borderColor: gradient,
+                backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: 'var(--accent)',
+                pointBorderWidth: 2,
+                pointRadius: Array(7).fill(5),
+                pointHoverRadius: 8
+            }]
+        };
+
+        let lastProgress = -1;
+        new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                animation: {
+                    duration: 1000,
+                    easing: 'easeInOutQuad',
+                    onProgress: function(animation) {
+                        const progress = animation.currentStep / animation.numSteps;
+                        if (Math.abs(progress - lastProgress) > 0.01) {
+                            const totalPoints = chartData.datasets[0].data.length;
+                            const pointRadius = chartData.datasets[0].pointRadius;
+                            for (let i = 0; i < totalPoints; i++) {
+                                const baseRadius = 5;
+                                const scale = progress > i / totalPoints ? 1 : 0.5;
+                                pointRadius[i] = baseRadius * scale;
+                            }
+                            lastProgress = progress;
+                            animation.chart.update();
+                        }
+                    },
+                    onComplete: function() {
+                        chartData.datasets[0].pointRadius = Array(7).fill(5);
+                        this.update();
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.raw.toLocaleString('ru-RU')} ₽`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return `${value / 1000}к`;
+                            },
+                            color: '#fff'
+                        },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    x: {
+                        ticks: { color: '#fff' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
